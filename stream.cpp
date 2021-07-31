@@ -186,6 +186,34 @@ constexpr auto partialSum() -> Stream<T>
     return Stream<T>{T{1}, []{ return addStreams(partialSum<T>(), integers<T>().next()); }};
 }
 
+template <typename T>
+constexpr auto merge(Stream<T> const& s1, Stream<T> const& s2)
+{
+    if (!s1.value)
+    {
+        return s2;
+    }
+    if (!s2.value)
+    {
+        return s1;
+    }
+    if (*s1.value < *s2.value)
+    {
+        return Stream<T>{*s1.value, [=]{ return merge(s1.next(), s2); }};
+    }
+    if (*s2.value < *s1.value)
+    {
+        return Stream<T>{*s2.value, [=]{ return merge(s2.next(), s1); }};
+    }
+    return Stream<T>{*s1.value, [=]{ return merge(s1.next(), s2.next()); }};
+}
+
+template <typename T>
+constexpr auto s235() -> Stream<T>
+{
+    return {1, []{ return merge(scaleStream(s235<T>(), T{2}), merge(scaleStream(s235<T>(), T{3}), scaleStream(s235<T>(), T{5}))); }};
+}
+
 int32_t main()
 {
     // printStream(ones<int32_t>());
@@ -197,6 +225,7 @@ int32_t main()
     // printStream(double_<int64_t>());
     // printStream(double2<int64_t>());
     // printStream(factorials<int64_t>());
-    printStream(partialSum<int64_t>());
+    // printStream(partialSum<int64_t>());
+    printStream(s235<int64_t>());
     return 0;
 }
