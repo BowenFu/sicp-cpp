@@ -106,12 +106,12 @@ auto streamFilter(FuncT&& func, Stream<ValueT> const& stream)
     return lambda();
 }
 
-template <typename IndexT, typename ValueT>
-auto streamRef(IndexT i, Stream<ValueT> const& stream)
+template <typename ValueT, typename IndexT>
+auto streamRef(Stream<ValueT> const& stream, IndexT i) -> ValueT
 {
     assert(i >= 0);
     assert(stream.value());
-    return i == 0 ? *stream.value() : streamRef(i - 1, stream.next());
+    return i == 0 ? *stream.value() : streamRef(stream.next(), i - 1);
 }
 
 template <typename T>
@@ -169,6 +169,14 @@ auto addStreams(Stream<T> const& s1, Stream<T> const& s2) -> Stream<T>
     return streamMap([](T a, T b) {
         // std::cout << a << "+" << b << std::endl;
         return a + b; }, s1, s2);
+}
+
+template <typename T>
+auto subtractStreams(Stream<T> const& s1, Stream<T> const& s2) -> Stream<T>
+{
+    return streamMap([](T a, T b) {
+        // std::cout << a << "-" << b << std::endl;
+        return a - b; }, s1, s2);
 }
 
 template <typename T>
@@ -362,6 +370,7 @@ auto tanSeries() -> Stream<T>
 template <typename T>
 auto sqrtImprove(T guess, T x)
 {
+    std::cout << "sqrtImprove: " << guess << std::endl;
     return (guess + x / guess) / T{2};
 }
 
@@ -369,14 +378,44 @@ template <typename T>
 auto sqrtStream(T x) -> Stream<T>
 {
     Stream<T> result = {T{1}, 
-        [=] {
+        [&result, x] // &result memory issue? used shared_ptr<Stream<T>> instead
+        {
             return streamMap([x](auto guess)
             {
                 return sqrtImprove(guess, x);
             },
-            sqrtStream(x));
+            result);
         }};
     return result;
+}
+
+template <typename T>
+auto piSummands(int32_t n) -> Stream<T>
+{
+    return {T{1} / n, [=]{
+        return scaleStream(piSummands<T>(n + 2), T{-1});
+    }};
+}
+
+template <typename T>
+auto piStream() -> Stream<T>
+{
+    static Stream<T> result = partialSumStream(scaleStream(piSummands<T>(T{1}), T{4}));
+    return result;
+}
+
+template <typename T>
+auto eulerTransform(Stream<T> const& stream) -> Stream<T>
+{
+    auto s0 = streamRef(stream, 0); // Sn-1
+    auto s1 = streamRef(stream, 1); // Sn
+    auto s2 = streamRef(stream, 2); // Sn+1
+    return {
+        s2 - (s2 - s1)*(s2 - s1) / (s0 - 2*s1 + s2),
+        [=]{
+            return eulerTransform(stream.next());
+        }
+    };
 }
 
 
@@ -402,6 +441,7 @@ int32_t main()
     // printStream(addStreams(mulSeries(sinSeries<double>(), sinSeries<double>()), mulSeries(cosSeries<double>(), cosSeries<double>())));
     // printStream(invertSeries(cosSeries<double>()));
     // printStream(tanSeries<double>());
-    printStream(sqrtStream<double>(2));
+    // printStream(sqrtStream<double>(2));
+    printStream(eulerTransform(piStream<double>()));
     return 0;
 }
