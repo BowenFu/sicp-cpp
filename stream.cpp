@@ -81,6 +81,12 @@ auto streamForEach(FuncT&& func, Stream<ValueT> const& stream)
     streamForEach(std::forward<FuncT>(func), stream.next());
 }
 
+template <typename T>
+std::ostream& operator<<(std::ostream &o, std::pair<T, T> const& p)
+{
+    return o << p.first << ", " << p.second;
+}
+
 template <typename ValueT>
 auto printStream(Stream<ValueT> const& stream)
 {
@@ -463,6 +469,31 @@ auto sqrt(T x, T tol)
     return streamLimit(sqrtStream<T>(x), tol);
 }
 
+template <typename T>
+auto interleave(Stream<T> const& s, Stream<T> const& t) -> Stream<T>
+{
+    if (!s.value())
+    {
+        return t;
+    }
+    return {*s.value(), [=]{
+        return interleave(t, s.next());
+    }};
+}
+
+template <typename T>
+auto pairs(Stream<T> const& s, Stream<T> const& t) -> Stream<std::pair<T, T>>
+{
+    return {{*s.value(), *t.value()},
+            [=]
+            {
+                return interleave(
+                    streamMap([=](auto x)
+                              { return std::pair<T, T>{*s.value(), x}; },
+                              t.next()),
+                    pairs(s.next(), t.next()));
+            }};
+}
 
 int32_t main()
 {
@@ -489,6 +520,7 @@ int32_t main()
     // printStream(sqrtStream<double>(2));
     // printStream(acceleratedSequence(eulerTransform<long double>, piStream<long double>()));
     // std::cout << pi(1e-10) << std::endl;
-    std::cout << sqrt(2.0, 1e-10) << std::endl;
+    // std::cout << sqrt(2.0, 1e-10) << std::endl;
+    printStream(pairs(integers<int32_t>(), integers<int32_t>()));
     return 0;
 }
