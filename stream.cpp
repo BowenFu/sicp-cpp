@@ -13,9 +13,9 @@ class Stream
     std::shared_ptr<MemoFunction<ValueT>> mNext;
 public:
     using ValueType = ValueT;
-    Stream() = default;
+    constexpr Stream() = default;
     template <typename FuncT>
-    Stream(ValueT value, FuncT next)
+    constexpr Stream(ValueT value, FuncT next)
         : mValue{value}, mNext{std::make_shared<MemoFunction<ValueT> >(next)}
     {}
     auto value() const
@@ -174,7 +174,18 @@ auto addStreams(Stream<T> const& s1, Stream<T> const& s2) -> Stream<T>
 template <typename T>
 auto mulStreams(Stream<T> const& s1, Stream<T> const& s2) -> Stream<T>
 {
-    return streamMap([](T a, T b) { return a * b; }, s1, s2);
+    return streamMap([](T a, T b) {
+        std::cout << a << "*" << b << std::endl;
+        return a * b; }, s1, s2);
+}
+
+template <typename T>
+constexpr auto scaleStream(Stream<T> const& stream, T factor)
+{
+    return streamMap([=](T v) {
+        std::cout << v << "*" << factor << std::endl;
+        return v * factor;
+        }, stream);
 }
 
 template <typename T>
@@ -185,7 +196,9 @@ auto ones() -> Stream<T>
 template <typename T>
 auto integers2() -> Stream<T>
 {
-    return {1, [=]{ return addStreams(ones<T>(), integers2<T>()); }};
+    // static variable for memorizing.
+    static Stream<T> result = {T{1}, [=]{ return addStreams(ones<T>(), integers2<T>()); }};
+    return result;
 }
 
 template <typename T>
@@ -198,33 +211,31 @@ auto fibs2() -> Stream<T>
 }
 
 template <typename T>
-constexpr auto scaleStream(Stream<T> const& stream, T factor)
+auto double_() -> Stream<T>
 {
-    return streamMap([=](T v) { return v * factor; }, stream);
+    static Stream<T> result = {T{1}, []{ return scaleStream(double_<T>(), T{2}); }};
+    return result;
 }
 
 template <typename T>
-constexpr auto double_() -> Stream<T>
+auto double2() -> Stream<T>
 {
-    return Stream<T>{1, []{ return scaleStream(double_<T>(), T{2}); }};
+    static Stream<T> result = Stream<T>{T{1}, []{ return addStreams(double2<T>(), double2<T>()); }};
+    return result;
 }
 
 template <typename T>
-constexpr auto double2() -> Stream<T>
+auto factorials() -> Stream<T>
 {
-    return Stream<T>{T{1}, []{ return addStreams(double_<T>(), double_<T>()); }};
+    static Stream<T> result = {T{1}, []{ return mulStreams(factorials<T>(), integers<T>().next()); }};
+    return result;
 }
 
 template <typename T>
-constexpr auto factorials() -> Stream<T>
+auto partialSum() -> Stream<T>
 {
-    return Stream<T>{T{1}, []{ return mulStreams(factorials<T>(), integers<T>().next()); }};
-}
-
-template <typename T>
-constexpr auto partialSum() -> Stream<T>
-{
-    return Stream<T>{T{1}, []{ return addStreams(partialSum<T>(), integers<T>().next()); }};
+    static Stream<T> result = {T{1}, []{ return addStreams(partialSum<T>(), integers<T>().next()); }};
+    return result;
 }
 
 template <typename T>
@@ -250,25 +261,66 @@ constexpr auto merge(Stream<T> const& s1, Stream<T> const& s2)
 }
 
 template <typename T>
-constexpr auto s235() -> Stream<T>
+auto s235() -> Stream<T>
 {
-    return {1, []
+    static Stream<T> result = {T{1}, []
             { return merge(scaleStream(s235<T>(), T{2}), merge(scaleStream(s235<T>(), T{3}), scaleStream(s235<T>(), T{5}))); }};
+    return result;
+}
+
+template <typename T>
+auto integrateSeries(Stream<T> const& stream) -> Stream<T>
+{
+    return streamMap(
+        [](T a, T b) { return a / b;},
+        stream,
+        integers<T>()
+    );
+}
+
+template <typename T>
+auto expSeries() -> Stream<T>
+{
+    static Stream<T> result = {T{1}, []
+            { return integrateSeries(expSeries<T>()); }};
+    return result;
+}
+
+template <typename T>
+auto cosSeries() -> Stream<T>;
+
+template <typename T>
+auto sinSeries() -> Stream<T>
+{
+    static Stream<T> result = {T{0}, []
+            { return integrateSeries(cosSeries<T>()); }};
+    return result;
+}
+
+template <typename T>
+auto cosSeries() -> Stream<T>
+{
+    static Stream<T> result = {T{1}, []
+            { return scaleStream(integrateSeries(sinSeries<T>()), T{-1}); }};
+    return result;
 }
 
 int32_t main()
 {
-    // printStream(ones<int32_t>());
     // auto const even = [](auto&& n) { return n%2 == 0;};
     // printStream(streamFilter(even, streamEnumerateInterval(100000, 200000)));
     // printStream(fibs<int64_t>());
     // printStream(primes<int64_t>());
-    printStream(fibs2<int64_t>());
-    // sum(3, 8);
+    // printStream(integers<int32_t>());
+    // printStream(fibs2<int64_t>());
     // printStream(double_<int64_t>());
     // printStream(double2<int64_t>());
     // printStream(factorials<int64_t>());
     // printStream(partialSum<int64_t>());
     // printStream(s235<int64_t>());
+    // printStream(integers2<int64_t>());
+    // printStream(expSeries<double>());
+    printStream(sinSeries<double>());
+    // printStream(cosSeries<double>());
     return 0;
 }
