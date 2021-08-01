@@ -495,6 +495,44 @@ auto pairs(Stream<T> const& s, Stream<T> const& t) -> Stream<std::pair<T, T>>
             }};
 }
 
+//===========
+
+template <typename T, typename FuncT = std::function<Stream<T>()>>
+auto integral(FuncT const& delayedIntegrand, T initialValue, T dt)
+{
+    auto integ = std::make_shared<Stream<T>>();
+    *integ = Stream<T>{ 
+        initialValue,
+        [=]{
+            return addStreams(scaleStream(delayedIntegrand(), dt), *integ);
+        }
+     };
+    return *integ;
+}
+
+template <typename T>
+auto vOfRC(T R, T C, T dt)
+{
+    return [=](Stream<T> const &i, T v0)
+    {
+        return addStreams(
+            scaleStream(i, R),
+            integral([=]{ return scaleStream(i, T{1} / C); }, v0, dt));
+    };
+}
+
+template <typename T, typename FuncT = std::function<T(T)>>
+auto solve(FuncT f, T y0, T dt)
+{
+    auto dy = [=] (auto y)
+    {
+        return streamMap(f, y);
+    };
+    auto y = std::make_shared<Stream<T>>();
+    *y = integral([=]{ return dy(*y); }, y0, dt);
+    return *y;
+}
+
 int32_t main()
 {
     // auto const even = [](auto&& n) { return n%2 == 0;};
@@ -521,6 +559,9 @@ int32_t main()
     // printStream(acceleratedSequence(eulerTransform<long double>, piStream<long double>()));
     // std::cout << pi(1e-10) << std::endl;
     // std::cout << sqrt(2.0, 1e-10) << std::endl;
-    printStream(pairs(integers<int32_t>(), integers<int32_t>()));
+    // printStream(pairs(integers<int32_t>(), integers<int32_t>()));
+    // auto RC1 = vOfRC(5.0, 1.0, 0.1);
+    // printStream(RC1(ones<double>(), 5));
+    std::cout << streamRef(solve([](auto y) { return y; }, 1.0, 0.001), 1000) << std::endl;
     return 0;
 }
