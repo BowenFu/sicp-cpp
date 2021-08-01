@@ -5,20 +5,23 @@
 template <typename ValueT>
 struct Stream
 {
+    using ValueType = ValueT;
     std::optional<ValueT> value;
     std::function<Stream<ValueT>()> next; // can wrap this as memo-func, + std::optional<ValueT> cached
 };
 
-template <typename FuncT, typename ValueT>
-auto streamMap(FuncT&& func, Stream<ValueT> const& stream)
+template <typename FuncT, typename ValueT, typename... StreamTs>
+auto streamMap(FuncT&& func, Stream<ValueT> const& stream, StreamTs const&... rest)
 {
-    using RetT = std::invoke_result_t<FuncT, ValueT>;
+    using RetT = std::invoke_result_t<FuncT, ValueT, typename StreamTs::ValueType...>;
     using ST = Stream<RetT>;
-    if (!stream.value)
+    auto hasValue = stream.value.has_value();
+    (assert(rest.value.has_value() == hasValue), ...);
+    if (!hasValue)
     {
         return ST{};
     }
-    return ST{func(*stream.value), [=] { return streamMap(func, stream.next()); }};
+    return ST{func(*stream.value, (*rest.value)...), [=] { return streamMap(func, stream.next(), rest.next()...); }};
 }
 
 template <typename FuncT, typename ValueT>
@@ -118,23 +121,13 @@ constexpr auto primes()
 template <typename T>
 auto addStreams(Stream<T> const& s1, Stream<T> const& s2) -> Stream<T>
 {
-    assert(static_cast<bool>(s1.value) == static_cast<bool>(s2.value));
-    if (!s1.value)
-    {
-        return s1;
-    }
-    return {*s1.value + *s2.value, [=]{ return addStreams(s1.next(), s2.next()); }};
+    return streamMap([](T a, T b) { return a + b; }, s1, s2);
 }
 
 template <typename T>
 auto mulStreams(Stream<T> const& s1, Stream<T> const& s2) -> Stream<T>
 {
-    assert(static_cast<bool>(s1.value) == static_cast<bool>(s2.value));
-    if (!s1.value)
-    {
-        return s1;
-    }
-    return {*s1.value * *s2.value, [=]{ return mulStreams(s1.next(), s2.next()); }};
+    return streamMap([](T a, T b) { return a * b; }, s1, s2);
 }
 
 template <typename T>
@@ -211,7 +204,8 @@ constexpr auto merge(Stream<T> const& s1, Stream<T> const& s2)
 template <typename T>
 constexpr auto s235() -> Stream<T>
 {
-    return {1, []{ return merge(scaleStream(s235<T>(), T{2}), merge(scaleStream(s235<T>(), T{3}), scaleStream(s235<T>(), T{5}))); }};
+    return {1, []
+            { return merge(scaleStream(s235<T>(), T{2}), merge(scaleStream(s235<T>(), T{3}), scaleStream(s235<T>(), T{5}))); }};
 }
 
 int32_t main()
@@ -225,7 +219,7 @@ int32_t main()
     // printStream(double_<int64_t>());
     // printStream(double2<int64_t>());
     // printStream(factorials<int64_t>());
-    // printStream(partialSum<int64_t>());
-    printStream(s235<int64_t>());
+    printStream(partialSum<int64_t>());
+    // printStream(s235<int64_t>());
     return 0;
 }
