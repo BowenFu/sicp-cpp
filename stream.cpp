@@ -167,7 +167,7 @@ template <typename T>
 auto addStreams(Stream<T> const& s1, Stream<T> const& s2) -> Stream<T>
 {
     return streamMap([](T a, T b) {
-        std::cout << a << "+" << b << std::endl;
+        // std::cout << a << "+" << b << std::endl;
         return a + b; }, s1, s2);
 }
 
@@ -175,7 +175,7 @@ template <typename T>
 auto mulStreams(Stream<T> const& s1, Stream<T> const& s2) -> Stream<T>
 {
     return streamMap([](T a, T b) {
-        std::cout << a << "*" << b << std::endl;
+        // std::cout << a << "*" << b << std::endl;
         return a * b; }, s1, s2);
 }
 
@@ -183,9 +183,20 @@ template <typename T>
 constexpr auto scaleStream(Stream<T> const& stream, T factor)
 {
     return streamMap([=](T v) {
-        std::cout << v << "*" << factor << std::endl;
+        // std::cout << v << "*" << factor << std::endl;
         return v * factor;
         }, stream);
+}
+
+template <typename T>
+auto partialSumStream(Stream<T> const& stream) -> Stream<T>
+{
+    if (!stream.value())
+    {
+        return {};
+    }
+    Stream<T> result = {*stream.value(), [=]{ return addStreams(partialSumStream<T>(stream), stream.next()); }};
+    return result;
 }
 
 template <typename T>
@@ -305,6 +316,49 @@ auto cosSeries() -> Stream<T>
     return result;
 }
 
+template <typename T>
+auto mulSeries(Stream<T> const& s1, Stream<T> const& s2) -> Stream<T>
+{
+    assert(s1.value());
+    assert(s2.value());
+    auto s1v = *s1.value();
+    auto s2v = *s2.value();
+    Stream<T> result = {s1v * s2v, // constant
+                        [=]
+                        {
+                            return addStreams(
+                                scaleStream(s2.next(), s1v),
+                                mulSeries(s2, s1.next()));
+                        }};
+    return result;
+}
+
+// S * X = 1
+// (a0 + SR) * X = 1
+// a0 * X + SR * X = 1
+// a0 * X = 1 - SR * X
+// X = (1 - SR * X) / a0
+template <typename T>
+auto invertSeries(Stream<T> const& stream) -> Stream<T>
+{
+    T a0 = *stream.value();
+    return Stream<T>{a0, [=] { return scaleStream(mulSeries(stream.next(), invertSeries(stream)), -a0); }};
+}
+
+template <typename T>
+auto divSeries(Stream<T> const& s1, Stream<T> const& s2) -> Stream<T>
+{
+    Stream<T> result = mulSeries(s1, invertSeries(s2));
+    return result;
+}
+
+template <typename T>
+auto tanSeries() -> Stream<T>
+{
+    static Stream<T> result = divSeries(sinSeries<T>(), cosSeries<T>());
+    return result;
+}
+
 int32_t main()
 {
     // auto const even = [](auto&& n) { return n%2 == 0;};
@@ -317,10 +371,15 @@ int32_t main()
     // printStream(double2<int64_t>());
     // printStream(factorials<int64_t>());
     // printStream(partialSum<int64_t>());
+    // printStream(partialSumStream(ones<int64_t>()));
     // printStream(s235<int64_t>());
     // printStream(integers2<int64_t>());
     // printStream(expSeries<double>());
-    printStream(sinSeries<double>());
+    // printStream(sinSeries<double>());
     // printStream(cosSeries<double>());
+    // printStream(mulSeries(cosSeries<double>(), cosSeries<double>()));
+    // printStream(addStreams(mulSeries(sinSeries<double>(), sinSeries<double>()), mulSeries(cosSeries<double>(), cosSeries<double>())));
+    // printStream(invertSeries(cosSeries<double>()));
+    printStream(tanSeries<double>());
     return 0;
 }
