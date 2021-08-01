@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <optional>
 #include <iostream>
+#include <numeric>
 
 // This is a must-have for recursive definition of stream.
 template <typename ValueT>
@@ -533,6 +534,88 @@ auto solve(FuncT f, T y0, T dt)
     return *y;
 }
 
+template <typename T>
+auto RLC(T R, T L, T C, T dt)
+{
+    return [=](T Vc0, T Il0)
+    {
+        auto dVc = [=] (auto Il)
+        {
+            return scaleStream(Il, -T{1}/C);
+        };
+        auto dIl = [=] (auto Vc, auto Il)
+        {
+            return addStreams(scaleStream(Vc, T{1}/L), scaleStream(Il, -R/L));
+        };
+        auto Vc = std::make_shared<Stream<T>>();
+        auto Il = std::make_shared<Stream<T>>();
+        *Vc = integral([=]{ return dVc(*Il); }, Vc0, dt);
+        *Il = integral([=]{ return dIl(*Vc, *Il); }, Il0, dt);
+        return std::make_pair(*Vc, *Il);
+    };
+}
+
+template <typename T>
+auto randomNumbers(T seed)
+{
+    auto randUpdate = [](T v)
+    {
+        return ((v * T{1103515245} + T{12345}) / T{6533}) % T{32174682};
+    };
+
+    auto result = std::make_shared<Stream<T>>();
+    *result = Stream<T>{seed, [=]{ return streamMap(randUpdate, *result); }};
+    return *result;
+}
+
+template <typename FuncT, typename ValueT>
+auto mapSuccessivePairs(FuncT&& func, Stream<ValueT> const& stream) -> Stream<std::invoke_result_t<FuncT, ValueT, ValueT>>
+{
+    auto v1 = *stream.value();
+    auto next = stream.next();
+    auto v2 = *next.value();
+    auto v = func(v1, v2);
+    return {
+        v,
+        [=] { return mapSuccessivePairs(func, next.next()); }
+    };
+}
+
+template <typename T>
+auto cesaroStream()
+{
+    return mapSuccessivePairs( 
+        [](T r1, T r2) -> bool { return std::gcd(r1, r2) == 1; },
+        randomNumbers(T{11}) // random seed
+     );
+}
+
+auto monteCarlo(Stream<bool> const& experimentStream, int32_t passed, int32_t failed) -> Stream<double>
+{
+    auto next = [=](int32_t passed, int32_t failed)
+    {
+        return Stream<double>{
+            double(passed) / (passed + failed),
+            [=] {
+                return monteCarlo(experimentStream.next(), passed, failed);
+            }
+        };
+    };
+    if (*experimentStream.value())
+    {
+        return next(passed+1, failed);
+    }
+    return next(passed, failed+1);
+}
+
+auto pi_ = streamMap(
+    [](auto p)
+    {
+        return sqrt(6.0/p, 1e-6);
+    },
+    monteCarlo(cesaroStream<int64_t>(), int64_t{0}, int64_t{0})
+);
+
 int32_t main()
 {
     // auto const even = [](auto&& n) { return n%2 == 0;};
@@ -562,6 +645,19 @@ int32_t main()
     // printStream(pairs(integers<int32_t>(), integers<int32_t>()));
     // auto RC1 = vOfRC(5.0, 1.0, 0.1);
     // printStream(RC1(ones<double>(), 5));
-    std::cout << streamRef(solve([](auto y) { return y; }, 1.0, 0.001), 1000) << std::endl;
+    // std::cout << streamRef(solve([](auto y) { return y; }, 1.0, 0.001), 1000) << std::endl;
+    // auto RLC1 = RLC(1.0, 1.0, 0.2, 0.1);
+    // auto RLC1_ = RLC1(10.0, 0.0);
+    /*
+    import numpy as np
+    import matplotlib.pyplot as plt
+    x = np.loadtxt("log")
+    plt.plot(x[:1000])
+    plt.savefig("x.png")
+    */
+    // printStream(RLC1_.first);
+    // printStream(RLC1_.second);
+    // printStream(cesaroStream<int32_t>());
+    printStream(pi_);
     return 0;
 }
