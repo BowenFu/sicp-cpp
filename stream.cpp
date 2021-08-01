@@ -370,7 +370,7 @@ auto tanSeries() -> Stream<T>
 template <typename T>
 auto sqrtImprove(T guess, T x)
 {
-    std::cout << "sqrtImprove: " << guess << std::endl;
+    // std::cout << "sqrtImprove: " << guess << std::endl;
     return (guess + x / guess) / T{2};
 }
 
@@ -418,6 +418,51 @@ auto eulerTransform(Stream<T> const& stream) -> Stream<T>
     };
 }
 
+template <typename TransformT, typename T>
+auto makeTableau(TransformT transform, Stream<T> const& stream) -> Stream<Stream<T>>
+{
+    return {stream, [=]{ return makeTableau(transform, transform(stream)); }};
+}
+
+template <typename T, typename TransformT = std::function<Stream<T>(Stream<T> const&)>>
+auto acceleratedSequence(TransformT transform, Stream<T> const& stream) -> Stream<T>
+{
+    return streamMap([](auto s) { return *s.value(); }, makeTableau(transform, stream));
+}
+
+template <typename T>
+auto iterate(T last, Stream<T> const& stream, T tol) -> T
+{
+    assert(stream.value());
+    auto v = *stream.value();
+    auto diff = v - last;
+    if (diff < tol && diff > -tol)
+    {
+        return v;
+    }
+    return iterate(v, stream.next(), tol);
+}
+
+template <typename T>
+auto streamLimit(Stream<T> const& stream, T tol)
+{
+    assert(stream.value());
+    auto v = *stream.value();
+    return iterate(v, stream.next(), tol);
+}
+
+template <typename T>
+auto pi(T tol)
+{
+    return streamLimit(acceleratedSequence(eulerTransform<T>, piStream<T>()), tol);
+}
+
+template <typename T>
+auto sqrt(T x, T tol)
+{
+    return streamLimit(sqrtStream<T>(x), tol);
+}
+
 
 int32_t main()
 {
@@ -442,6 +487,8 @@ int32_t main()
     // printStream(invertSeries(cosSeries<double>()));
     // printStream(tanSeries<double>());
     // printStream(sqrtStream<double>(2));
-    printStream(eulerTransform(piStream<double>()));
+    // printStream(acceleratedSequence(eulerTransform<long double>, piStream<long double>()));
+    // std::cout << pi(1e-10) << std::endl;
+    std::cout << sqrt(2.0, 1e-10) << std::endl;
     return 0;
 }
