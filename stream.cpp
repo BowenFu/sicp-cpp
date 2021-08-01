@@ -359,6 +359,27 @@ auto tanSeries() -> Stream<T>
     return result;
 }
 
+template <typename T>
+auto sqrtImprove(T guess, T x)
+{
+    return (guess + x / guess) / T{2};
+}
+
+template <typename T>
+auto sqrtStream(T x) -> Stream<T>
+{
+    Stream<T> result = {T{1}, 
+        [=] {
+            return streamMap([x](auto guess)
+            {
+                return sqrtImprove(guess, x);
+            },
+            sqrtStream(x));
+        }};
+    return result;
+}
+
+
 int32_t main()
 {
     // auto const even = [](auto&& n) { return n%2 == 0;};
@@ -380,6 +401,7 @@ int32_t main()
     // printStream(mulSeries(cosSeries<double>(), cosSeries<double>()));
     // printStream(addStreams(mulSeries(sinSeries<double>(), sinSeries<double>()), mulSeries(cosSeries<double>(), cosSeries<double>())));
     // printStream(invertSeries(cosSeries<double>()));
-    printStream(tanSeries<double>());
+    // printStream(tanSeries<double>());
+    printStream(sqrtStream<double>(2));
     return 0;
 }
